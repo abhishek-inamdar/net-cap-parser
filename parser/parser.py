@@ -400,7 +400,7 @@ class UDP(object):
 class IP(object):
     __slots__ = 'byteList', 'v', 'headerLen', 'dsf', 'totalLen', 'id', 'idHex', \
                 'flag', 'flagHex', 'offset', 'ttl', 'protocolId', 'protocolDesc', \
-                'headerChecksum', 'srcIP', 'destIP', 'protocol', 'data'
+                'headerChecksum', 'srcIP', 'destIP', 'protocol', 'data', 'dataLen'
 
     def __init__(self, byteList):
         self.byteList = byteList
@@ -466,10 +466,13 @@ class IP(object):
 
         if self.flag == 2:
             self.data = ''
+            self.dataLen = 0
             for i in range(self.headerLen * 4, len(byteList)):
                 self.data += byteList[i]
+                self.dataLen += 1
         else:
             self.data = None
+            self.dataLen = 0
 
     def __str__(self):
         string = '\n\tIP version: ' + str(self.v)
@@ -487,8 +490,8 @@ class IP(object):
         if self.protocol is not None:
             string += str(self.protocol)
         if self.data is not None:
-            # string += '\n\tData (' + str(len(self.data)) + ' bytes)'
-            # string += '\n\tData: ' + self.data
+            string += '\n\tData (' + str(self.dataLen) + ' bytes)'
+            string += '\n\tData: ' + self.data
             pass
         return string
 
