@@ -1,6 +1,8 @@
 """
 file: parser.py
-description:
+description: This program will parse K-12 Text file of Network Packet Capture
+    and print the field representation as per standards.
+    Protocols Covered: 802.2, 802.3, STP, ARP, ICMP, IGMP, IPv4, TCP, UDP.
 language: python3
 author: Abhishek Inamdar (ai2363@rit.edu)
 """
@@ -214,7 +216,6 @@ class ICMP(object):
         string += '\n\tChecksum: ' + '(0x' + self.checksum + ')'
         string += '\n\tIdentifier: ' + '(0x' + self.id + ')'
         string += '\n\tSequence Number: ' + '(0x' + self.seqNum + ')'
-
         # data_len = len(self.byteList) - 42
         # string += '\n\tData: (' + str(data_len) + ' bytes)\n\t\t'
         # for i in range(42, len(self.byteList)):
@@ -222,8 +223,182 @@ class ICMP(object):
         return string
 
 
+class IGMP(object):
+    __slots__ = 'byteList', 'type', 'typeDesc', 'maxRespTime', \
+                'maxRespTimeHex', 'checksum', 'groupAddress'
+
+    def __init__(self, byteList):
+        self.byteList = byteList
+        self.type = byteList[0]
+        if self.type == '11':
+            self.typeDesc = 'Membership Query'
+        elif self.type == '16':
+            self.typeDesc = 'Membership Report'
+        elif self.type == '17':
+            self.typeDesc = 'Leave Group'
+        elif self.type == '12':
+            self.typeDesc = 'Membership Report'
+        elif self.type == 'ff':
+            self.typeDesc = 'Hello'
+        else:
+            self.typeDesc = 'Unknown'
+        self.maxRespTimeHex = byteList[1]
+        self.maxRespTime = int(byteList[1], 16) / 10
+        self.checksum = byteList[2] + byteList[3]
+        self.groupAddress = ''
+        for i in range(4, 8):
+            self.groupAddress += str(int(self.byteList[i], 16)) + '.'
+        self.groupAddress = self.groupAddress[:-1]
+
+    def __str__(self):
+        string = '\n\tIGMP:'
+        string += '\n\tType: ' + self.typeDesc + ' ' + '(0x' + str(self.type) + ')'
+        if self.type == '11' or self.type == '16' or self.type == '17':
+            string += '\n\tMax Resp. Time: ' + str(self.maxRespTime) + ' sec ' + '(0x' + self.maxRespTimeHex + ')'
+        else:
+            string += '\n\tReserved: ' + '(0x' + self.maxRespTimeHex + ')'
+        string += '\n\tChecksum: ' + '(0x' + self.checksum + ')'
+        string += '\n\tAddress: ' + self.groupAddress
+        return string
+
+
+class TCP(object):
+    __slots__ = 'byteList', 'srcPort', 'destPort', 'seqNumRaw', 'ackNumRaw', \
+                'headerLen', 'flagsHex', 'window', 'checksum', 'urgentPtr', \
+                'optHex', 'optByteLen', 'flagsBin', \
+                'data', \
+                'fin', 'syn', 'rst', 'psh', 'ack', 'urg', 'ecn', 'cwr', 'nonce', \
+                'MSSKind', 'MSSLen', 'MSSValue', 'NOP1Kind', 'NOP2Kind', \
+                'SACKKind', 'SACKLen'
+
+    def __init__(self, byteList):
+        self.byteList = byteList
+        self.srcPort = int(byteList[0] + byteList[1], 16)
+        self.destPort = int(byteList[2] + byteList[3], 16)
+        self.seqNumRaw = int(byteList[4] + byteList[5] + byteList[6] + byteList[7], 16)
+        self.ackNumRaw = int(byteList[8] + byteList[9] + byteList[10] + byteList[11], 16)
+        self.headerLen = int(byteList[12][:1], 16)
+        self.flagsHex = byteList[12][1:] + byteList[13]
+        self.flagsBin = "{0:12b}".format(int(self.flagsHex, 16))
+        for i in range(0, len(self.flagsBin)):
+            if self.flagsBin[i] != ' ':
+                bValue = bool(int(self.flagsBin[i]) == 1)
+            else:
+                bValue = False
+            if i == 11:
+                self.fin = bValue
+            elif i == 10:
+                self.syn = bValue
+            elif i == 9:
+                self.rst = bValue
+            elif i == 8:
+                self.psh = bValue
+            elif i == 7:
+                self.ack = bValue
+            elif i == 6:
+                self.urg = bValue
+            elif i == 5:
+                self.ecn = bValue
+            elif i == 4:
+                self.cwr = bValue
+            elif i == 3:
+                self.nonce = bValue
+
+        self.window = int(byteList[14] + byteList[15], 16)
+        self.checksum = byteList[16] + byteList[17]
+        self.urgentPtr = int(byteList[18] + byteList[19], 16)
+        self.optByteLen = (self.headerLen * 4) - 20
+        if self.optByteLen >= 4:
+            self.MSSKind = int(byteList[20], 16)
+            self.MSSLen = int(byteList[21], 16)
+            self.MSSValue = int(byteList[22] + byteList[23], 16)
+        if self.optByteLen >= 5:
+            self.NOP1Kind = int(byteList[24], 16)
+        if self.optByteLen >= 6:
+            self.NOP2Kind = int(byteList[25], 16)
+        if self.optByteLen >= 8:
+            self.SACKKind = int(byteList[26], 16)
+            self.SACKLen = int(byteList[27], 16)
+
+        self.data = ''
+        if len(byteList) <= 64:
+            for i in range(self.headerLen * 4, len(byteList)):
+                self.data += byteList[i]
+        else:
+            for i in range(self.headerLen * 4, 64):
+                self.data += byteList[i]
+            self.data += '...'
+
+    def __str__(self):
+        string = '\n\tTCP:'
+        string += '\n\tSource Port: ' + str(self.srcPort)
+        string += '\n\tDestination Port: ' + str(self.destPort)
+        string += '\n\tSequence Number raw: ' + str(self.seqNumRaw)
+        string += '\n\tAcknowledgement Number raw: ' + str(self.ackNumRaw)
+        string += '\n\tHeader Length: ' + str(self.headerLen * 4) + ' bytes ' + '(' + str(self.headerLen) + ')'
+        string += '\n\tFlags: ' + '(0x' + self.flagsHex + ')'
+        string += '\n\t\tNonce: ' + str(self.nonce)
+        string += '\n\t\tCongestion Window Reduced (CWR): ' + str(self.cwr)
+        string += '\n\t\tECN-Echo: ' + str(self.ecn)
+        string += '\n\t\tUrgent: ' + str(self.urg)
+        string += '\n\t\tAcknowledgement: ' + str(self.ack)
+        string += '\n\t\tPush: ' + str(self.psh)
+        string += '\n\t\tReset: ' + str(self.rst)
+        string += '\n\t\tSYN: ' + str(self.syn)
+        string += '\n\t\tFIN: ' + str(self.fin)
+
+        string += '\n\tWindow: ' + str(self.window)
+        string += '\n\tChecksum: ' + '(0x' + self.checksum + ')'
+        string += '\n\tUrgent Pointer: ' + str(self.urgentPtr)
+        if self.optByteLen > 0:
+            string += '\n\tOptions: ' + str(self.optByteLen) + ' bytes'
+            if self.optByteLen >= 4:
+                string += '\n\t\tMaximum Segment size: ' + str(self.MSSValue) + ' bytes'
+                string += '\n\t\t\tKind: Maximum Segment Size (' + str(self.MSSKind) + ')'
+                string += '\n\t\t\tLength: ' + str(self.MSSLen)
+                string += '\n\t\t\tMSS Value: ' + str(self.MSSValue)
+            if self.optByteLen >= 5:
+                string += '\n\t\tNo-Operation (NOP)'
+                string += '\n\t\t\tKind: No-Operation (' + str(self.NOP1Kind) + ')'
+            if self.optByteLen >= 6:
+                string += '\n\t\tNo-Operation (NOP)'
+                string += '\n\t\t\tKind: No-Operation (' + str(self.NOP2Kind) + ')'
+            if self.optByteLen >= 8:
+                string += '\n\t\tSACK Permitted'
+                string += '\n\t\t\tKind: SACK Permitted (' + str(self.SACKKind) + ')'
+                string += '\n\t\t\tLength: ' + str(self.SACKLen)
+        if self.data:
+            string += '\n\tData: ' + self.data
+        return string
+
+
+class UDP(object):
+    __slots__ = 'byteList', 'srcPort', 'destPort', 'len', 'payloadLen', 'checksum', \
+                'data'
+
+    def __init__(self, byteList):
+        self.byteList = byteList
+        self.srcPort = int(byteList[0] + byteList[1], 16)
+        self.destPort = int(byteList[2] + byteList[3], 16)
+        self.len = int(byteList[4] + byteList[5], 16)
+        self.payloadLen = self.len - 8
+        self.checksum = byteList[6] + byteList[7]
+        self.data = ''
+        for i in range(8, self.len):
+            self.data += byteList[i]
+
+    def __str__(self):
+        string = '\n\tUDP:'
+        string += '\n\tSource Port: ' + str(self.srcPort)
+        string += '\n\tDestination Port: ' + str(self.destPort)
+        string += '\n\tLength: ' + str(self.len)
+        string += '\n\tChecksum: ' + '(0x' + self.checksum + ')'
+        string += '\n\tUDP Payload: (' + str(self.payloadLen) + ' bytes)'
+        return string
+
+
 class IP(object):
-    __slots__ = 'byteList', 'v', 'headerLen', 'dsf', 'totalLen', 'id', 'idHex',\
+    __slots__ = 'byteList', 'v', 'headerLen', 'dsf', 'totalLen', 'id', 'idHex', \
                 'flag', 'flagHex', 'offset', 'ttl', 'protocolId', 'protocolDesc', \
                 'headerChecksum', 'srcIP', 'destIP', 'protocol', 'data'
 
@@ -252,7 +427,25 @@ class IP(object):
         if self.protocolId == 1:
             self.protocolDesc = 'ICMP'
             if self.flag != 2:
-                self.protocol = ICMP(byteList[20:])
+                self.protocol = ICMP(byteList[self.headerLen * 4:self.totalLen])
+            else:
+                self.protocol = None
+        elif self.protocolId == 2:
+            self.protocolDesc = 'IGMP'
+            if self.flag != 2:
+                self.protocol = IGMP(byteList[self.headerLen * 4:self.totalLen])
+            else:
+                self.protocol = None
+        elif self.protocolId == 6:
+            self.protocolDesc = 'TCP'
+            if self.flag != 2:
+                self.protocol = TCP(byteList[self.headerLen * 4:self.totalLen])
+            else:
+                self.protocol = None
+        elif self.protocolId == 17:
+            self.protocolDesc = 'UDP'
+            if self.flag != 2:
+                self.protocol = UDP(byteList[self.headerLen * 4:self.totalLen])
             else:
                 self.protocol = None
         else:
@@ -273,14 +466,14 @@ class IP(object):
 
         if self.flag == 2:
             self.data = ''
-            for i in range(20, len(byteList)):
+            for i in range(self.headerLen * 4, len(byteList)):
                 self.data += byteList[i]
         else:
             self.data = None
 
     def __str__(self):
         string = '\n\tIP version: ' + str(self.v)
-        string += '\n\tIP Header Length: ' + str(self.headerLen)
+        string += '\n\tIP Header Length: ' + str(self.headerLen * 4) + ' bytes ' + '(' + str(self.headerLen) + ')'
         string += '\n\tDifferentiated Service Field: ' + '(0x' + self.dsf + ')'
         string += '\n\tTotal length: ' + str(self.totalLen)
         string += '\n\tIdentification: ' + '(0x' + self.idHex + ')' + ' (' + str(self.id) + ')'
@@ -294,8 +487,8 @@ class IP(object):
         if self.protocol is not None:
             string += str(self.protocol)
         if self.data is not None:
-            #string += '\n\tData (' + str(len(self.data)) + ' bytes)'
-            #string += '\n\tData: ' + self.data
+            # string += '\n\tData (' + str(len(self.data)) + ' bytes)'
+            # string += '\n\tData: ' + self.data
             pass
         return string
 
@@ -422,8 +615,8 @@ def main():
         capture = get_capture(data_lines)
         i = 1
         for packet in capture.packets:
+            # if 1 <= i <= 5:
             print('Frame ' + str(i))
-            # if 3 <= i <= 3:
             print(packet)
             i = i + 1
 
