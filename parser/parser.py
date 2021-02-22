@@ -569,7 +569,7 @@ class Packet(object):
         return string + '\n'
 
     def get_byte_length(self):
-        return len(self.bytes)
+        return len(self.byteList)
 
 
 class Capture(object):
