@@ -732,7 +732,7 @@ class Capture(object):
             for s in strSplit:
                 if s.strip():
                     self.protocolDistSet.add(s)
-        self.avgPacketSize = totalPacketSize / self.packetCount
+        self.avgPacketSize = round(totalPacketSize / self.packetCount, 2)
 
     def __str__(self):
         string = 'Dataset:'
