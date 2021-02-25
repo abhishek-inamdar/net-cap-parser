@@ -558,7 +558,8 @@ class LOOP(object):
     """
     Class representation of Loopback Protocol
     """
-    __slots__ = 'byteList', 'data', 'dataLen', 'protocolDist', 'skipCount', 'func', 'fwdAddr', \
+    __slots__ = 'byteList', 'data', 'dataLen', 'protocolDist',\
+                'skipCount', 'func', 'fwdAddr', \
                 'relFunc', 'funcDesc', 'receiptNum'
 
     def __init__(self, byteList):
