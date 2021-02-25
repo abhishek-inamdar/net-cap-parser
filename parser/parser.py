@@ -1,22 +1,37 @@
 """
 file: parser.py
-description: This program will parse K-12 Text file of Network Packet Capture
+description: This program will parse K-12 Text file of Network Packet data
     and print the field representation as per standards.
-    Protocols Covered: 802.2, 802.3, STP, ARP, ICMP, IGMP, IPv4, TCP, UDP.
+    Protocols Covered: 802.2, 802.3, Ethernet II, STP, ARP, ICMP, IGMP,
+                        IP, TCP, UDP.
 language: python3
 author: Abhishek Inamdar (ai2363@rit.edu)
 """
+
 import sys
+from datetime import datetime
+
+
+# Utility Methods
+def get_hex_string(hexValue):
+    if hexValue:
+        return '(0x' + hexValue + ')'
+    else:
+        return ''
 
 
 class STP(object):
+    """
+    Class representation of Spanning Tree Protocol (STP)
+    """
     __slots__ = 'byteList', 'versionId', 'bType', 'bFlag', 'rootPriority', \
                 'rootSysIdExt', 'rootSysId', 'cost', 'bridgePriority', \
                 'bridgeSysIdExt', 'bridgeSysId', 'portId', 'messageAge', \
-                'maxAge', 'helloTime', 'delay', 'padding'
+                'maxAge', 'helloTime', 'delay', 'padding', 'protocolDist'
 
     def __init__(self, byteList):
         self.byteList = byteList
+        self.protocolDist = 'STP;'
         self.versionId = byteList[0]
         self.bType = byteList[1]
         self.bFlag = byteList[2]
@@ -53,9 +68,9 @@ class STP(object):
             self.padding += byteList[i]
 
     def __str__(self):
-        string = '\n\tProtocol Version Identifier = ' + '(0x' + self.versionId + ')'
-        string += '\n\tBPDU Type = ' + '(0x' + self.bType + ')'
-        string += '\n\tBPDU flags = ' + '(0x' + self.bFlag + ')'
+        string = '\n\tProtocol Version Identifier = ' + get_hex_string(self.versionId)
+        string += '\n\tBPDU Type = ' + get_hex_string(self.bType)
+        string += '\n\tBPDU flags = ' + get_hex_string(self.bFlag)
         string += '\n\tRoot identifier:'
         string += '\n\t\tRoot Bridge Priority: ' + str(self.rootPriority)
         string += '\n\t\tRoot Bridge System ID Extension: ' + str(self.rootSysIdExt)
@@ -65,7 +80,7 @@ class STP(object):
         string += '\n\t\tBridge Priority: ' + str(self.bridgePriority)
         string += '\n\t\tBridge System ID Extension: ' + str(self.bridgeSysIdExt)
         string += '\n\t\tBridge System ID: ' + self.bridgeSysId
-        string += '\n\tPort identifier:' + '(0x' + self.portId + ')'
+        string += '\n\tPort identifier:' + get_hex_string(self.portId)
         string += '\n\tMessage Age: ' + str(self.messageAge)
         string += '\n\tMax Age: ' + str(self.maxAge)
         string += '\n\tHello Time: ' + str(self.helloTime)
@@ -75,8 +90,11 @@ class STP(object):
 
 
 class Packet802(object):
+    """
+    Class representation of IEEE 802.3 Packet with 802.2 Header
+    """
     __slots__ = 'byteList', 'ether_length', 'dsap', 'ssap', 'control', 'pId', \
-                'pDesc', 'stp'
+                'pDesc', 'protocol', 'protocolDist', 'orgCode'
 
     def __init__(self, byteList):
         self.byteList = byteList
@@ -84,32 +102,51 @@ class Packet802(object):
         self.dsap = byteList[2]
         self.ssap = byteList[3]
         self.control = byteList[4]
-        self.pId = byteList[5] + byteList[6]
+        self.protocolDist = '802.3;802.2;'
+        if (self.dsap == 'aa' and self.ssap == 'aa') or \
+                (self.dsap == 'ab' and self.ssap == 'ab'):
+            self.orgCode = byteList[5] + ':' + byteList[6] + ':' + byteList[7]
+            self.pId = byteList[8] + byteList[9]
+        else:
+            self.orgCode = None
+            self.pId = byteList[5] + byteList[6]
+
         if self.pId == '0000':
             self.pDesc = 'Spanning Tree Protocol'
-            self.stp = STP(byteList[7:])
+            self.protocol = STP(byteList[7:])
+            self.protocolDist += self.protocol.protocolDist
+        elif self.pId == '2000':
+            self.pDesc = 'Cisco Discovery Protocol'
+            self.protocol = None  # CDP(byteList[10:])
+            # self.protocolDist += self.protocol.protocolDist
         else:
             self.pDesc = 'Unknown'
 
     def __str__(self):
-        string = '\n\tLength= ' + str(self.ether_length)
-        string += '\n\tDSAP = ' + '(0x' + self.dsap + ')'
-        string += '\n\tSSAP = ' + '(0x' + self.ssap + ')'
-        string += '\n\tControl = ' + '(0x' + self.control + ')'
-        string += '\n\tProtocol Identifier: ' + self.pDesc + '(0x' + self.pId + ')'
-        if self.stp:
-            string += str(self.stp)
+        string = '\n\tLength: ' + str(self.ether_length)
+        string += '\n\tDSAP: ' + get_hex_string(self.dsap)
+        string += '\n\tSSAP: ' + get_hex_string(self.ssap)
+        string += '\n\tControl field: ' + get_hex_string(self.control)
+        if self.orgCode:
+            string += '\n\tOrganization Code: ' + self.orgCode
+        string += '\n\tProtocol Identifier: ' + self.pDesc + get_hex_string(self.pId)
+        if self.protocol:
+            string += str(self.protocol)
         return string
 
 
 class ARP(object):
+    """
+    Class representation of Address Resolution Protocol (ARP)
+    """
     __slots__ = 'byteList', 'hwType', 'hwDesc', 'pType', 'pDesc', 'hwSize', \
                 'pSize', 'opCode', 'srcMAC', 'srcIP', 'destMAC', 'destIP', \
-                'padding'
+                'padding', 'protocolDist'
 
     def __init__(self, byteList):
         self.byteList = byteList
         self.hwType = int(byteList[0] + byteList[1], 16)
+        self.protocolDist = 'ARP;'
         if self.hwType == 1:
             self.hwDesc = 'Ethernet'
         else:
@@ -150,7 +187,7 @@ class ARP(object):
     def __str__(self):
         string = '\n\tHardware Type: '
         string += self.hwDesc + '(' + str(self.hwType) + ')'
-        string += '\n\tProtocol Type: ' + self.pDesc + '(0x' + self.pType + ')'
+        string += '\n\tProtocol Type: ' + self.pDesc + get_hex_string(self.pType)
         string += '\n\tHardware size: ' + str(self.hwSize)
         string += '\n\tProtocol size: ' + str(self.pSize)
         string += '\n\tOpcode: '
@@ -170,8 +207,11 @@ class ARP(object):
 
 
 class ICMP(object):
+    """
+    Class representation of Internet Control Message Protocol (ICMP)
+    """
     __slots__ = 'byteList', 'type', 'typeDesc', 'code', 'checksum', 'id', \
-                'seqNum'
+                'seqNum', 'protocolDist', 'data', 'dataLen'
 
     def __init__(self, byteList):
         self.byteList = byteList
@@ -201,31 +241,37 @@ class ICMP(object):
         else:
             self.typeDesc = 'Unknown'
 
+        self.protocolDist = 'ICMP;'
+
         self.code = int(byteList[1], 16)
         self.checksum = byteList[2] + byteList[3]
         self.id = byteList[4] + byteList[5]
         self.seqNum = byteList[6] + byteList[7]
-        if self.type == 0:
-            # TODO Add code for response time
-            pass
+        self.data = ''
+        self.dataLen = 0
+        for i in range(8, len(byteList)):
+            self.data += byteList[i]
+            self.dataLen += 1
 
     def __str__(self):
         string = '\n\tICMP:'
         string += '\n\tType: ' + str(self.type) + ' ' + self.typeDesc
         string += '\n\tCode: ' + str(self.code)
-        string += '\n\tChecksum: ' + '(0x' + self.checksum + ')'
-        string += '\n\tIdentifier: ' + '(0x' + self.id + ')'
-        string += '\n\tSequence Number: ' + '(0x' + self.seqNum + ')'
-        # data_len = len(self.byteList) - 42
-        # string += '\n\tData: (' + str(data_len) + ' bytes)\n\t\t'
-        # for i in range(42, len(self.byteList)):
-        #     string += self.byteList[i]
+        string += '\n\tChecksum: ' + get_hex_string(self.checksum)
+        string += '\n\tIdentifier: ' + get_hex_string(self.id)
+        string += '\n\tSequence Number: ' + get_hex_string(self.seqNum)
+        string += '\n\tData (' + str(self.dataLen) + ' bytes)'
+        string += '\n\tData: ' + self.data
         return string
 
 
 class IGMP(object):
+    """
+    Class representation of Internet Group Management Protocol (IGMP)
+    """
     __slots__ = 'byteList', 'type', 'typeDesc', 'maxRespTime', \
-                'maxRespTimeHex', 'checksum', 'groupAddress'
+                'maxRespTimeHex', 'checksum', 'groupAddress', \
+                'protocolDist'
 
     def __init__(self, byteList):
         self.byteList = byteList
@@ -242,6 +288,8 @@ class IGMP(object):
             self.typeDesc = 'Hello'
         else:
             self.typeDesc = 'Unknown'
+
+        self.protocolDist = 'IGMP;'
         self.maxRespTimeHex = byteList[1]
         self.maxRespTime = int(byteList[1], 16) / 10
         self.checksum = byteList[2] + byteList[3]
@@ -252,24 +300,27 @@ class IGMP(object):
 
     def __str__(self):
         string = '\n\tIGMP:'
-        string += '\n\tType: ' + self.typeDesc + ' ' + '(0x' + str(self.type) + ')'
+        string += '\n\tType: ' + self.typeDesc + ' ' + get_hex_string(str(self.type))
         if self.type == '11' or self.type == '16' or self.type == '17':
-            string += '\n\tMax Resp. Time: ' + str(self.maxRespTime) + ' sec ' + '(0x' + self.maxRespTimeHex + ')'
+            string += '\n\tMax Resp. Time: ' + str(self.maxRespTime) + ' sec ' + get_hex_string(self.maxRespTimeHex)
         else:
-            string += '\n\tReserved: ' + '(0x' + self.maxRespTimeHex + ')'
-        string += '\n\tChecksum: ' + '(0x' + self.checksum + ')'
+            string += '\n\tReserved: ' + get_hex_string(self.maxRespTimeHex)
+        string += '\n\tChecksum: ' + get_hex_string(self.checksum)
         string += '\n\tAddress: ' + self.groupAddress
         return string
 
 
 class TCP(object):
+    """
+    Class representation of Transmission Control Protocol (TCP)
+    """
     __slots__ = 'byteList', 'srcPort', 'destPort', 'seqNumRaw', 'ackNumRaw', \
                 'headerLen', 'flagsHex', 'window', 'checksum', 'urgentPtr', \
                 'optHex', 'optByteLen', 'flagsBin', \
                 'data', \
                 'fin', 'syn', 'rst', 'psh', 'ack', 'urg', 'ecn', 'cwr', 'nonce', \
                 'MSSKind', 'MSSLen', 'MSSValue', 'NOP1Kind', 'NOP2Kind', \
-                'SACKKind', 'SACKLen'
+                'SACKKind', 'SACKLen', 'protocolDist'
 
     def __init__(self, byteList):
         self.byteList = byteList
@@ -304,6 +355,7 @@ class TCP(object):
             elif i == 3:
                 self.nonce = bValue
 
+        self.protocolDist = 'TCP;'
         self.window = int(byteList[14] + byteList[15], 16)
         self.checksum = byteList[16] + byteList[17]
         self.urgentPtr = int(byteList[18] + byteList[19], 16)
@@ -321,13 +373,8 @@ class TCP(object):
             self.SACKLen = int(byteList[27], 16)
 
         self.data = ''
-        if len(byteList) <= 64:
-            for i in range(self.headerLen * 4, len(byteList)):
-                self.data += byteList[i]
-        else:
-            for i in range(self.headerLen * 4, 64):
-                self.data += byteList[i]
-            self.data += '...'
+        for i in range(self.headerLen * 4, len(byteList)):
+            self.data += byteList[i]
 
     def __str__(self):
         string = '\n\tTCP:'
@@ -336,7 +383,7 @@ class TCP(object):
         string += '\n\tSequence Number raw: ' + str(self.seqNumRaw)
         string += '\n\tAcknowledgement Number raw: ' + str(self.ackNumRaw)
         string += '\n\tHeader Length: ' + str(self.headerLen * 4) + ' bytes ' + '(' + str(self.headerLen) + ')'
-        string += '\n\tFlags: ' + '(0x' + self.flagsHex + ')'
+        string += '\n\tFlags: ' + get_hex_string(self.flagsHex)
         string += '\n\t\tNonce: ' + str(self.nonce)
         string += '\n\t\tCongestion Window Reduced (CWR): ' + str(self.cwr)
         string += '\n\t\tECN-Echo: ' + str(self.ecn)
@@ -348,7 +395,7 @@ class TCP(object):
         string += '\n\t\tFIN: ' + str(self.fin)
 
         string += '\n\tWindow: ' + str(self.window)
-        string += '\n\tChecksum: ' + '(0x' + self.checksum + ')'
+        string += '\n\tChecksum: ' + get_hex_string(self.checksum)
         string += '\n\tUrgent Pointer: ' + str(self.urgentPtr)
         if self.optByteLen > 0:
             string += '\n\tOptions: ' + str(self.optByteLen) + ' bytes'
@@ -373,11 +420,15 @@ class TCP(object):
 
 
 class UDP(object):
+    """
+    Class representation of User Datagram Protocol (UDP)
+    """
     __slots__ = 'byteList', 'srcPort', 'destPort', 'len', 'payloadLen', 'checksum', \
-                'data'
+                'data', 'protocolDist'
 
     def __init__(self, byteList):
         self.byteList = byteList
+        self.protocolDist = 'UDP;'
         self.srcPort = int(byteList[0] + byteList[1], 16)
         self.destPort = int(byteList[2] + byteList[3], 16)
         self.len = int(byteList[4] + byteList[5], 16)
@@ -392,15 +443,19 @@ class UDP(object):
         string += '\n\tSource Port: ' + str(self.srcPort)
         string += '\n\tDestination Port: ' + str(self.destPort)
         string += '\n\tLength: ' + str(self.len)
-        string += '\n\tChecksum: ' + '(0x' + self.checksum + ')'
+        string += '\n\tChecksum: ' + get_hex_string(self.checksum)
         string += '\n\tUDP Payload: (' + str(self.payloadLen) + ' bytes)'
         return string
 
 
 class IP(object):
+    """
+    Class representation of Internet Protocol (IP)
+    """
     __slots__ = 'byteList', 'v', 'headerLen', 'dsf', 'totalLen', 'id', 'idHex', \
                 'flag', 'flagHex', 'offset', 'ttl', 'protocolId', 'protocolDesc', \
-                'headerChecksum', 'srcIP', 'destIP', 'protocol', 'data', 'dataLen'
+                'headerChecksum', 'srcIP', 'destIP', 'protocol', 'data', 'dataLen', \
+                'protocolDist'
 
     def __init__(self, byteList):
         self.byteList = byteList
@@ -413,7 +468,7 @@ class IP(object):
         self.flag = int(byteList[6][:1], 16)
         self.flagHex = byteList[6]
 
-        # TODO: Confirm below offset calculation, it works, but doesn't make sense
+        # Confirm below offset calculation, it works, but doesn't make sense
         binary = "{:8b}".format(int(byteList[6] + byteList[7], 16))
         bLen = len(binary)
         offsetStart = 0
@@ -421,7 +476,6 @@ class IP(object):
             offsetStart = bLen - 12
         offsetBin = binary[offsetStart:] + '000'
         self.offset = int(offsetBin, 2)
-
         self.ttl = int(byteList[8], 16)
         self.protocolId = int(byteList[9], 16)
         if self.protocolId == 1:
@@ -452,6 +506,10 @@ class IP(object):
             self.protocolDesc = 'Unknown'
             self.protocol = None
 
+        self.protocolDist = 'IP;'
+        if self.protocol is not None:
+            self.protocolDist += self.protocol.protocolDist
+
         self.headerChecksum = byteList[10] + byteList[11]
 
         self.srcIP = ''
@@ -477,14 +535,14 @@ class IP(object):
     def __str__(self):
         string = '\n\tIP version: ' + str(self.v)
         string += '\n\tIP Header Length: ' + str(self.headerLen * 4) + ' bytes ' + '(' + str(self.headerLen) + ')'
-        string += '\n\tDifferentiated Service Field: ' + '(0x' + self.dsf + ')'
+        string += '\n\tDifferentiated Service Field: ' + get_hex_string(self.dsf)
         string += '\n\tTotal length: ' + str(self.totalLen)
-        string += '\n\tIdentification: ' + '(0x' + self.idHex + ')' + ' (' + str(self.id) + ')'
-        string += '\n\tFlags: ' + '(0x' + self.flagHex + ')'
+        string += '\n\tIdentification: ' + get_hex_string(self.idHex) + ' (' + str(self.id) + ')'
+        string += '\n\tFlags: ' + get_hex_string(self.flagHex)
         string += '\n\tFragment Offset: ' + str(self.offset)
         string += '\n\tTime to Live: ' + str(self.ttl)
         string += '\n\tProtocol: ' + self.protocolDesc + ' (' + str(self.protocolId) + ')'
-        string += '\n\tHeader Checksum: ' + '(0x' + self.headerChecksum + ')'
+        string += '\n\tHeader Checksum: ' + get_hex_string(self.headerChecksum)
         string += '\n\tSource Address: ' + self.srcIP
         string += '\n\tDestination Address: ' + self.destIP
         if self.protocol is not None:
@@ -496,41 +554,108 @@ class IP(object):
         return string
 
 
+class LOOP(object):
+    """
+    Class representation of Loopback Protocol
+    """
+    __slots__ = 'byteList', 'data', 'dataLen', 'protocolDist', 'skipCount', 'func', 'fwdAddr', \
+                'relFunc', 'funcDesc', 'receiptNum'
+
+    def __init__(self, byteList):
+        self.byteList = byteList
+        self.protocolDist = 'LOOP;'
+        self.skipCount = int(byteList[0], 16)
+        start = 2 + self.skipCount
+        self.relFunc = int(byteList[start], 16)
+        # self.fwdAddr = ''
+        # for i in range(2, 8):
+        #     self.fwdAddr += byteList[start + i] + ':'
+        # self.fwdAddr = self.fwdAddr[:-1]
+        # self.relFunc = int(byteList[start + 8], 16)
+        # self.receiptNum = int(byteList[start + 10], 16)
+
+        self.funcDesc = ''
+        if self.relFunc == 1:
+            self.funcDesc = 'Reply'
+        elif self.relFunc == 2:
+            self.relFunc = 'Forward Data'
+        else:
+            self.funcDesc = 'Unknown'
+
+        self.receiptNum = int(byteList[start + 2], 16)
+        self.data = ''
+        self.dataLen = 0
+
+        # for i in range(start + 12, len(byteList)):
+        for i in range(start + 4, len(byteList)):
+            self.data += byteList[i]
+            self.dataLen += 1
+
+    def __str__(self):
+        string = '\n\tLOOP:'
+        string += '\n\tskipCount: ' + str(self.skipCount)
+        # string += '\n\tFunction: ' + str(self.func)
+        # string += '\n\tForwarding address: ' + self.fwdAddr
+        string += '\n\tRelevant function: ' + self.funcDesc + ' ' + str(self.relFunc)
+        string += '\n\tReceipt number: ' + str(self.receiptNum)
+        if self.data is not None:
+            string += '\n\tData (' + str(self.dataLen) + ' bytes)'
+            string += '\n\tData: ' + self.data
+            pass
+        return string
+
+
 class Ethernet2(object):
-    __slots__ = 'byteList', 'ether_type', 'arp', 'ip'
+    """
+    Class representation of Ethernet II packet
+    """
+    __slots__ = 'byteList', 'ether_type', 'typeDesc', 'protocol', 'protocolDist'
 
     def __init__(self, byteList):
         self.byteList = byteList
         self.ether_type = byteList[0] + byteList[1]
+        self.protocolDist = 'EthernetII;'
         if self.ether_type == '0806':
-            self.arp = ARP(byteList[2:])
+            self.typeDesc = 'ARP'
+            self.protocol = ARP(byteList[2:])
         elif self.ether_type == '0800':
-            self.ip = IP(byteList[2:])
+            self.typeDesc = 'IP'
+            self.protocol = IP(byteList[2:])
+        elif self.ether_type == '9000':
+            self.typeDesc = 'LOOP'
+            self.protocol = LOOP(byteList[2:])
         else:
-            pass
+            self.protocol = None
+            self.typeDesc = 'Unknown'
+
+        if self.protocol:
+            self.protocolDist += self.protocol.protocolDist
 
     def __str__(self):
         string = '\n\tType: '
-        if self.ether_type == '0806':
-            string += 'ARP' + '(0x' + self.ether_type + ')'
-            string += str(self.arp)
-        elif self.ether_type == '0800':
-            string += 'IPv4' + '(0x' + self.ether_type + ')'
-            string += str(self.ip)
-        else:
-            string += 'Unknown' + '(' + self.ether_type + ')'
+        string += self.typeDesc + get_hex_string(self.ether_type)
+        if self.protocol:
+            string += str(self.protocol)
         return string
 
 
 class Packet(object):
+    """
+    Class representation of Packet
+    """
     __slots__ = 'line1', 'byteList', 'id', 'destination_mac', 'source_mac', \
-                'dest_mac_type', 'layer2_type', 'packet802', 'packetEther'
+                'dest_mac_type', 'layer2_type', 'packet802', 'packetEther', \
+                'packetSize', 'timeStamp', 'protocolDist'
 
     def __init__(self, line1, line2):
         self.line1 = line1
-        self.byteList = [l.strip() for l in line2.split('|') if l.strip()]
+        tsStr = [s.strip() for s in line1.split(' ') if s.strip()][0].split(',')
+        self.timeStamp = datetime.strptime(tsStr[0] + ',' + tsStr[1] + tsStr[2], "%H:%M:%S,%f")
+
+        self.byteList = [s.strip() for s in line2.split('|') if s.strip()]
         self.id = self.byteList[0]
         del self.byteList[0]
+        self.packetSize = len(self.byteList)
 
         dest_mac_start = self.byteList[0]
         if dest_mac_start == '01':
@@ -553,11 +678,14 @@ class Packet(object):
         deciderHex = self.byteList[12] + self.byteList[13]
         decider10 = int(deciderHex, 16)
 
+        self.protocolDist = ''
         if decider10 <= 1500:
             self.packet802 = Packet802(self.byteList[12:])
+            self.protocolDist += self.packet802.protocolDist
             self.layer2_type = 'IEEE 802.3 Ethernet'
         else:
             self.packetEther = Ethernet2(self.byteList[12:])
+            self.protocolDist += self.packetEther.protocolDist
             self.layer2_type = 'Ethernet II'
 
     def __str__(self):
@@ -571,21 +699,71 @@ class Packet(object):
             string += str(self.packet802)
         return string + '\n'
 
-    def get_byte_length(self):
-        return len(self.byteList)
+    def get_packet_size(self):
+        return self.packetSize
 
 
 class Capture(object):
-    __slots__ = 'packets',
+    """
+    Class representation of Capture (Entire Dataset)
+    """
+    __slots__ = 'packets', 'packetCount', 'maxPacketSize', 'minPacketSize', 'avgPacketSize', \
+                'firstTimeStamp', 'protocolDistSet'
 
     def __init__(self, packets):
         self.packets = packets
+        self.protocolDistSet = set()
+        self.packetCount = 0
+        self.maxPacketSize = -sys.maxsize
+        self.minPacketSize = sys.maxsize
+        totalPacketSize = 0
+        for packet in self.packets:
+            self.packetCount += 1
+            if self.packetCount == 1:
+                self.firstTimeStamp = packet.timeStamp
+            packet_size = packet.get_packet_size()
+            totalPacketSize += packet_size
+            if packet_size > self.maxPacketSize:
+                self.maxPacketSize = packet_size
+            if packet_size < self.minPacketSize:
+                self.minPacketSize = packet_size
 
-    def get_packet_count(self):
-        return len(self.packets)
+            strSplit = packet.protocolDist.split(';')
+            for s in strSplit:
+                if s.strip():
+                    self.protocolDistSet.add(s)
+        self.avgPacketSize = totalPacketSize / self.packetCount
+
+    def __str__(self):
+        string = 'Dataset:'
+        string += '\n\tNumber of Packets: ' + str(self.packetCount)
+        string += '\n\tProtocol Distribution: ' + str(self.protocolDistSet)
+        string += '\n\tMaximum Packet size: ' + str(self.maxPacketSize) + ' bytes'
+        string += '\n\tMinimum Packet size: ' + str(self.minPacketSize) + ' bytes'
+        string += '\n\tAverage Packet size: ' + str(self.avgPacketSize) + ' bytes'
+        string += '\n\nPackets:\n'
+        i = 1
+        previousTs = self.firstTimeStamp
+        for packet in self.packets:
+            # if 6590 <= i <= 6594:
+            string += 'Frame ' + str(i)
+            timeStamp = packet.timeStamp
+            string += '\n\tTimeStamp (HH:MM:SS.f): ' + str(timeStamp.time())
+            string += '\n\tDelta Time from last packet (HH:MM:SS.f): ' + str(timeStamp - previousTs)
+            string += '\n'
+            previousTs = timeStamp
+            string += str(packet)
+            string += '\n'
+            i = i + 1
+        return string
 
 
 def get_file_data(file_path):
+    """
+    returns lines of raw data from a given file
+    :param file_path: path for raw data file
+    :return: lines of raw data from a given file
+    """
     cap_file_lines = []
     with open(file_path, 'rt') as cap_file:
         for line in cap_file:
@@ -594,6 +772,11 @@ def get_file_data(file_path):
 
 
 def get_capture(dataLines):
+    """
+    Iterates over raw data and converts it into parsed data
+    :param dataLines: lines of raw data from the text file
+    :return: Capture object, entire parsed dataset
+    """
     line1_offset = 2
     line2_offset = 3
     packet_offset = 4
@@ -611,17 +794,16 @@ def get_capture(dataLines):
 
 
 def main():
+    """
+    main method
+    :return: None
+    """
     if len(sys.argv) != 2:
-        print("Usage: parser.py <filePath>")
+        print("Usage: parser.py <filePath of text file>")
     else:
         data_lines = get_file_data(sys.argv[1])
         capture = get_capture(data_lines)
-        i = 1
-        for packet in capture.packets:
-            # if 1 <= i <= 5:
-            print('Frame ' + str(i))
-            print(packet)
-            i = i + 1
+        print(capture)
 
 
 if __name__ == '__main__':
