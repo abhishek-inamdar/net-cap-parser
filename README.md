@@ -1,6 +1,7 @@
-Networking Capture Parser
+**Networking Capture Parser**
 
-Python program file named parser.py (Usage: parser.py<space><file path of text file>). This program takes 1 argument as the file path for the text-based network data capture file. Program expects text file to be in a particular format as shown below.
+
+Python program file named **parser.py** (Usage: parser.py<space><file path of text file>). This program takes 1 argument as the file path for the text-based network data capture file. Program expects text file to be in a particular format as shown below.
 
 +---------+---------------+----------+
 03:09:24,762,913   ETHER
